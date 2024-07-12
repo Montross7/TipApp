@@ -45,6 +45,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.jettip.components.InputField
 import com.example.jettip.ui.theme.JetTipTheme
+import com.example.jettip.utils.calculateTotalPerPerson
+import com.example.jettip.utils.calculateTotalTip
 import com.example.jettip.widgets.RoundIconButton
 
 class MainActivity : ComponentActivity() {
@@ -103,25 +105,42 @@ fun TopHeader(totalPerPerson: Double = 0.0) {
 @Preview
 @Composable
 fun MainContent() {
-    BillForm() { billAmt ->
-        Log.d("AMT", "Main Content $billAmt")
+
+    val range = 1.0f.. 100.0f
+
+    val splitByState = remember {
+        mutableStateOf(1)
     }
+    val tipAmountState = remember {
+        mutableStateOf(0.0)
+    }
+
+    val totalPerPersonState = remember {
+        mutableStateOf(0.0)
+    }
+
+    BillForm(
+        range = range,
+        splitByState = splitByState,
+        tipAmountState = tipAmountState,
+        totalPerPersonState = totalPerPersonState
+    ) { }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun BillForm(
+    range: ClosedFloatingPointRange<Float> = 1.0f..100.0f,
+    splitByState: MutableState<Int>,
+    tipAmountState: MutableState<Double>,
+    totalPerPersonState: MutableState<Double>,
     modifier: Modifier = Modifier, onValChanged: (String) -> Unit = {}
 ) {
     val totalBillState = remember {
-        mutableStateOf("0")
+        mutableStateOf("")
     }
 
-    val numOfPeople = remember {
-        mutableStateOf(1)
-    }
-
-    val tipPercentage = remember {
+    val tipPercentageState = remember {
         mutableStateOf(33.0f)
     }
 
@@ -131,10 +150,24 @@ fun BillForm(
 
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    fun updateTip() {
+        tipAmountState.value =
+            calculateTotalTip(
+                totalBill = totalBillState.value.toDouble(),
+                tipPercentage = tipPercentageState.value
+            )
+    }
 
+    fun updateTotalPerPerson() {
+        totalPerPersonState.value = calculateTotalPerPerson(
+            totalBill = totalBillState.value.toDouble(),
+            tipPercentage = tipPercentageState.value,
+            splitBy = splitByState.value
+        )
+    }
 
     Column {
-        TopHeader(123.0)
+        TopHeader(totalPerPersonState.value)
         Surface(
             modifier = modifier
                 .padding(2.dp)
@@ -155,6 +188,8 @@ fun BillForm(
                         if (!validState) return@KeyboardActions
 
                         onValChanged(totalBillState.value.trim())
+                        updateTip()
+                        updateTotalPerPerson()
 
                         keyboardController?.hide()
                     })
@@ -173,18 +208,20 @@ fun BillForm(
                             horizontalArrangement = Arrangement.End
                         ) {
                             RoundIconButton(imageVector = Icons.Default.Remove) {
-                                if (numOfPeople.value > 1) {
-                                    numOfPeople.value -= 1
+                                if (splitByState.value > 1) {
+                                    splitByState.value -= 1
+                                    updateTotalPerPerson()
                                 }
                             }
                             Text(
-                                text = "${numOfPeople.value}",
+                                text = "${splitByState.value}",
                                 modifier = Modifier
                                     .align(Alignment.CenterVertically)
                                     .padding(start = 9.dp, end = 9.dp)
                             )
                             RoundIconButton(imageVector = Icons.Default.Add) {
-                                numOfPeople.value += 1
+                                splitByState.value += 1
+                                updateTotalPerPerson()
                             }
                         }
 
@@ -195,21 +232,28 @@ fun BillForm(
                     ) {
                         Text(text = "Tip", modifier = Modifier.align(Alignment.CenterVertically))
                         Spacer(modifier = Modifier.width(200.dp))
-                        Text(text = "$${totalBillState.value * tipPercentage.value/100}", modifier = Modifier.align(Alignment.CenterVertically))
+                        Text(
+                            text = "$" + "%.2f".format(tipAmountState.value),
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        )
                     }
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(text = "%.2f".format(tipPercentage.value) + "%")
+                        Text(text = "%.2f".format(tipPercentageState.value) + "%")
                         Spacer(modifier = Modifier.height(14.dp))
                         Slider(
                             modifier = Modifier.padding(start = 16.dp, end = 16.dp),
-                            value = tipPercentage.value,
-                            onValueChange = { newVal -> tipPercentage.value = newVal },
+                            value = tipPercentageState.value,
+                            onValueChange = { newVal ->
+                                tipPercentageState.value = newVal
+                                updateTip()
+                                updateTotalPerPerson()
+                            },
                             steps = 5,
-                            valueRange = 0f..100f
+                            valueRange = range
                         )
                     }
                 } else {
@@ -220,6 +264,7 @@ fun BillForm(
         }
     }
 }
+
 
 @Preview
 @Composable
